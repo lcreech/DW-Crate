@@ -1,70 +1,172 @@
-const CLIENT_ID = 'your_client_id'; // Replace with your Spotify app's client ID
-const REDIRECT_URI = 'https://your-netlify-site.netlify.app'; // Update with your deployed Netlify URL
-const AUTH_ENDPOINT = 'https://accounts.spotify.com/authorize';
-const SCOPES = 'playlist-read-private playlist-modify-private';
+const clientId = "cb3468700cfa49fda9bdd7af2319dcc5";
+const redirectUri = "https://dwcrate.netlify.app/";
+const scopes = [
+  "playlist-read-private",
+  "playlist-modify-private",
+  "playlist-modify-public"
+];
 
-let accessToken;
+const authEndpoint = "https://accounts.spotify.com/authorize";
+let accessToken = null;
 
-// Handle authentication
-document.getElementById('auth-button').addEventListener('click', () => {
-  const authUrl = `${AUTH_ENDPOINT}?client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(
-    REDIRECT_URI
-  )}&scope=${encodeURIComponent(SCOPES)}&response_type=token`;
-  window.location.href = authUrl;
-});
+// DOM Elements
+const authButton = document.getElementById("auth-button");
+const fetchPlaylistsButton = document.getElementById("fetch-dw-playlists");
+const createPlaylistButton = document.getElementById("create-playlist");
+const playlistsContainer = document.getElementById("playlists-container");
+const authSection = document.getElementById("auth-section");
+const playlistSection = document.getElementById("playlist-section");
 
-// Extract token from URL
-window.onload = () => {
+// Build Authorization URL
+function buildAuthUrl() {
+  return (
+    `${authEndpoint}?client_id=${clientId}` +
+    `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+    `&scope=${encodeURIComponent(scopes.join(" "))}` +
+    `&response_type=token`
+  );
+}
+
+// Extract Access Token from URL Hash
+function getAccessTokenFromUrl() {
   const hash = window.location.hash;
   if (hash) {
-    accessToken = new URLSearchParams(hash.substring(1)).get('access_token');
-    if (accessToken) {
-      document.getElementById('auth-section').classList.add('hidden');
-      document.getElementById('playlist-section').classList.remove('hidden');
+    const params = new URLSearchParams(hash.substring(1));
+    return params.get("access_token");
+  }
+  return null;
+}
+
+// Authenticate User
+authButton.addEventListener("click", () => {
+  window.location.href = buildAuthUrl();
+});
+
+// Fetch User's Playlists
+fetchPlaylistsButton.addEventListener("click", async () => {
+  playlistsContainer.innerHTML = "<p>Loading playlists...</p>";
+
+  try {
+    const response = await fetch("https://api.spotify.com/v1/me/playlists", {
+      headers: {
+        Authorization: `Bearer ${accessToken}`
+      }
+    });
+
+    const data = await response.json();
+    const discoverWeeklyPlaylists = data.items.filter(playlist =>
+      playlist.name.includes("Discover Weekly")
+    );
+
+    playlistsContainer.innerHTML = "";
+    if (discoverWeeklyPlaylists.length === 0) {
+      playlistsContainer.innerHTML = "<p>No Discover Weekly playlists found.</p>";
+      return;
     }
+
+    discoverWeeklyPlaylists.forEach(playlist => {
+      const div = document.createElement("div");
+      div.textContent = `${playlist.name} (${playlist.tracks.total} tracks)`;
+      playlistsContainer.appendChild(div);
+    });
+
+    createPlaylistButton.classList.remove("hidden");
+  } catch (error) {
+    playlistsContainer.innerHTML = "<p>Failed to load playlists.</p>";
+    console.error("Error fetching playlists:", error);
+  }
+});
+
+// Create Aggregated Playlist
+createPlaylistButton.addEventListener("click", async () => {
+  playlistsContainer.innerHTML = "<p>Creating aggregated playlist...</p>";
+
+  try {
+    // Fetch User's Profile to Get User ID
+    const userProfileResponse = await fetch("https://api.spotify.com/v1/me", {
+      headers: {
+        Authorization: `Bearer ${accessToken}`
+      }
+    });
+    const userProfile = await userProfileResponse.json();
+
+    // Create New Playlist
+    const createPlaylistResponse = await fetch(
+      `https://api.spotify.com/v1/users/${userProfile.id}/playlists`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          name: "DW Crate - Aggregated Discover Weekly",
+          description: "All your Discover Weekly tracks in one playlist!",
+          public: true
+        })
+      }
+    );
+
+    const newPlaylist = await createPlaylistResponse.json();
+
+    // Fetch Tracks from All Discover Weekly Playlists
+    const playlistsResponse = await fetch("https://api.spotify.com/v1/me/playlists", {
+      headers: {
+        Authorization: `Bearer ${accessToken}`
+      }
+    });
+
+    const playlistsData = await playlistsResponse.json();
+    const discoverWeeklyPlaylists = playlistsData.items.filter(playlist =>
+      playlist.name.includes("Discover Weekly")
+    );
+
+    const trackUris = [];
+    for (const playlist of discoverWeeklyPlaylists) {
+      const tracksResponse = await fetch(
+        `https://api.spotify.com/v1/playlists/${playlist.id}/tracks`,
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`
+          }
+        }
+      );
+
+      const tracksData = await tracksResponse.json();
+      trackUris.push(...tracksData.items.map(item => item.track.uri));
+    }
+
+    // Add Tracks to the New Playlist
+    const chunkSize = 100; // Spotify's limit for adding tracks in one request
+    for (let i = 0; i < trackUris.length; i += chunkSize) {
+      const trackChunk = trackUris.slice(i, i + chunkSize);
+      await fetch(
+        `https://api.spotify.com/v1/playlists/${newPlaylist.id}/tracks`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ uris: trackChunk })
+        }
+      );
+    }
+
+    playlistsContainer.innerHTML =
+      "<p>Aggregated playlist created successfully!</p>";
+  } catch (error) {
+    playlistsContainer.innerHTML = "<p>Failed to create playlist.</p>";
+    console.error("Error creating playlist:", error);
+  }
+});
+
+// Initialize App
+window.onload = () => {
+  accessToken = getAccessTokenFromUrl();
+  if (accessToken) {
+    authSection.classList.add("hidden");
+    playlistSection.classList.remove("hidden");
+    window.location.hash = ""; // Clear token from URL
   }
 };
-
-// Fetch Discover Weekly playlists
-document.getElementById('fetch-dw-playlists').addEventListener('click', async () => {
-  const response = await fetch('https://api.spotify.com/v1/me/playlists', {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-    },
-  });
-  const data = await response.json();
-  const dwPlaylists = data.items.filter((playlist) => playlist.name.includes('Discover Weekly'));
-
-  const container = document.getElementById('playlists-container');
-  container.innerHTML = ''; // Clear existing content
-  dwPlaylists.forEach((playlist) => {
-    const div = document.createElement('div');
-    div.textContent = playlist.name;
-    div.style.margin = '10px 0';
-    container.appendChild(div);
-  });
-
-  if (dwPlaylists.length > 0) {
-    document.getElementById('create-playlist').classList.remove('hidden');
-  }
-});
-
-// Create aggregated playlist
-document.getElementById('create-playlist').addEventListener('click', async () => {
-  const playlistName = 'DW Crate Aggregated Playlist';
-  const createResponse = await fetch('https://api.spotify.com/v1/me/playlists', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      name: playlistName,
-      public: false,
-    }),
-  });
-
-  const playlistData = await createResponse.json();
-  console.log(`Created playlist: ${playlistData.name}`);
-  alert(`Playlist "${playlistName}" created successfully!`);
-});
