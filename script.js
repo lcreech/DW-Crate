@@ -137,10 +137,13 @@ createPlaylistButton.addEventListener("click", async () => {
       playlist.name.toLowerCase().includes("discover weekly")
     );
 
-    const trackUris = [];
+    const trackUris = new Set(); // Use Set to avoid duplicates
+    const aggregatedPlaylistTracks = await fetchTracksFromPlaylist(newPlaylist.id); // Get existing tracks in the aggregated playlist
+
+    // Collect tracks from each Discover Weekly playlist
     for (const playlist of discoverWeeklyPlaylists) {
       console.log(`Fetching tracks for playlist: ${playlist.name} with ID: ${playlist.id}`);
-      
+
       // Fetch tracks from each Discover Weekly playlist
       const tracksResponse = await fetch(
         `https://api.spotify.com/v1/playlists/${playlist.id}/tracks?limit=100`,
@@ -158,52 +161,55 @@ createPlaylistButton.addEventListener("click", async () => {
 
       // Ensure there are tracks, then add them
       if (tracksData.items && tracksData.items.length > 0) {
-        trackUris.push(...tracksData.items.map(item => item.track.uri));
-      } else {
-        console.log(`No tracks found in playlist: ${playlist.name}`);
+        tracksData.items.forEach(item => {
+          // Skip tracks already in the aggregated playlist
+          if (aggregatedPlaylistTracks.includes(item.track.uri)) {
+            return;
+          }
+
+          // Skip tracks from Discover Weekly playlist (prevention of adding Discover Weekly tracks)
+          if (playlist.name.toLowerCase().includes("discover weekly")) {
+            return;
+          }
+
+          trackUris.add(item.track.uri);
+        });
       }
     }
 
-    // Debugging: Log all track URIs to verify the correct tracks
-    console.log("All Track URIs:", trackUris);
+    // Add unique tracks to the aggregated playlist
+    if (trackUris.size > 0) {
+      const trackUrisArray = Array.from(trackUris);
 
-    // If there are no track URIs, return early
-    if (trackUris.length === 0) {
-      playlistsContainer.innerHTML = "<p>No tracks found in Discover Weekly playlists.</p>";
-      return;
+      await fetch(`https://api.spotify.com/v1/playlists/${newPlaylist.id}/tracks`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          uris: trackUrisArray
+        })
+      });
+
+      playlistsContainer.innerHTML = `<p>Successfully created the aggregated playlist with ${trackUrisArray.length} tracks!</p>`;
+    } else {
+      playlistsContainer.innerHTML = "<p>No new tracks to add to the aggregated playlist.</p>";
     }
-
-    // Add Tracks to the New Playlist
-    const chunkSize = 100; // Spotify's limit for adding tracks in one request
-    for (let i = 0; i < trackUris.length; i += chunkSize) {
-      const trackChunk = trackUris.slice(i, i + chunkSize);
-      await fetch(
-        `https://api.spotify.com/v1/playlists/${newPlaylist.id}/tracks`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({ uris: trackChunk })
-        }
-      );
-    }
-
-    playlistsContainer.innerHTML =
-      "<p>Aggregated playlist created successfully!</p>";
   } catch (error) {
-    playlistsContainer.innerHTML = "<p>Failed to create playlist.</p>";
+    playlistsContainer.innerHTML = "<p>Failed to create the aggregated playlist.</p>";
     console.error("Error creating playlist:", error);
   }
 });
 
-// Initialize App
-window.onload = () => {
-  accessToken = getAccessTokenFromUrl();
-  if (accessToken) {
-    authSection.classList.add("hidden");
-    playlistSection.classList.remove("hidden");
-    window.location.hash = ""; // Clear token from URL
-  }
-};
+// Fetch existing tracks from a playlist (used to prevent adding duplicates)
+async function fetchTracksFromPlaylist(playlistId) {
+  const response = await fetch(`https://api.spotify.com/v1/playlists/${playlistId}/tracks`, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`
+    }
+  });
+
+  const data = await response.json();
+  return data.items.map(item => item.track.uri); // Return a list of track URIs
+}
