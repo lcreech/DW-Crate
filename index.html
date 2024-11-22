@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DW Crate</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header>
+    <h1>DW Crate</h1>
+    <p>Discover Weekly aggregator</p>
+  </header>
+
+  <main>
+    <!-- Authentication Section -->
+    <section id="auth-section">
+      <h2>Connect to Spotify</h2>
+      <p>Log in to merge all your Discover Weekly tracks into one playlist!</p>
+      <button id="auth-button">Login with Spotify</button>
+    </section>
+
+    <!-- Playlist Management Section -->
+    <section id="playlist-section" class="hidden">
+      <h2>Manage Your Crate</h2>
+      <p>Fetch and organize tracks from all your Discover Weekly playlists.</p>
+      <button id="fetch-dw-playlists">Fetch Discover Weekly Playlists</button>
+      <div id="playlists-container"></div>
+      <button id="create-playlist" class="hidden">Create Aggregated Playlist</button>
+    </section>
+  </main>
+
+  <footer>
+    <p>&copy; 2024 DW Crate | Made with 🎶 and ❤️</p>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>
