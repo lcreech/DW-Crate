@@ -42,28 +42,44 @@ authButton.addEventListener("click", () => {
   window.location.href = buildAuthUrl();
 });
 
-// Fetch User's Playlists
+// Fetch All Playlists from Spotify
 fetchPlaylistsButton.addEventListener("click", async () => {
   playlistsContainer.innerHTML = "<p>Loading playlists...</p>";
 
-  try {
-    const response = await fetch("https://api.spotify.com/v1/me/playlists", {
-      headers: {
-        Authorization: `Bearer ${accessToken}`
-      }
-    });
+  let allPlaylists = [];
+  let nextUrl = "https://api.spotify.com/v1/me/playlists?limit=50";
 
-    const data = await response.json();
-    const discoverWeeklyPlaylists = data.items.filter(playlist =>
-      playlist.name.includes("Discover Weekly")
+  try {
+    // Pagination loop to fetch all playlists
+    while (nextUrl) {
+      const response = await fetch(nextUrl, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      allPlaylists = allPlaylists.concat(data.items);
+      nextUrl = data.next; // Update URL for next page if exists
+    }
+
+    // Filter Discover Weekly Playlists
+    const discoverWeeklyPlaylists = allPlaylists.filter(playlist =>
+      playlist.name.toLowerCase().includes("discover weekly")
     );
 
-    playlistsContainer.innerHTML = "";
+    playlistsContainer.innerHTML = ""; // Clear loading message
+
     if (discoverWeeklyPlaylists.length === 0) {
       playlistsContainer.innerHTML = "<p>No Discover Weekly playlists found.</p>";
       return;
     }
 
+    // Display Playlists in UI
     discoverWeeklyPlaylists.forEach(playlist => {
       const div = document.createElement("div");
       div.textContent = `${playlist.name} (${playlist.tracks.total} tracks)`;
