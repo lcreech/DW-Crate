@@ -134,13 +134,14 @@ createPlaylistButton.addEventListener("click", async () => {
 
     const playlistsData = await playlistsResponse.json();
     const discoverWeeklyPlaylists = playlistsData.items.filter(playlist =>
-      playlist.name.includes("Discover Weekly")
+      playlist.name.toLowerCase().includes("discover weekly")
     );
 
     const trackUris = [];
     for (const playlist of discoverWeeklyPlaylists) {
+      // Fetch tracks from each Discover Weekly playlist with a correct limit
       const tracksResponse = await fetch(
-        `https://api.spotify.com/v1/playlists/${playlist.id}/tracks`,
+        `https://api.spotify.com/v1/playlists/${playlist.id}/tracks?limit=100`,
         {
           headers: {
             Authorization: `Bearer ${accessToken}`
@@ -153,7 +154,10 @@ createPlaylistButton.addEventListener("click", async () => {
       // Debugging: Log all track data to check the response
       console.log(`Tracks from ${playlist.name}:`, tracksData);
 
-      trackUris.push(...tracksData.items.map(item => item.track.uri));
+      // Ensure there are tracks, then add them
+      if (tracksData.items && tracksData.items.length > 0) {
+        trackUris.push(...tracksData.items.map(item => item.track.uri));
+      }
     }
 
     // Debugging: Log all track URIs to verify the correct tracks
