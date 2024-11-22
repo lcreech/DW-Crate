@@ -149,7 +149,20 @@ createPlaylistButton.addEventListener("click", async () => {
       );
 
       const tracksData = await tracksResponse.json();
+
+      // Debugging: Log all track data to check the response
+      console.log(`Tracks from ${playlist.name}:`, tracksData);
+
       trackUris.push(...tracksData.items.map(item => item.track.uri));
+    }
+
+    // Debugging: Log all track URIs to verify the correct tracks
+    console.log("All Track URIs:", trackUris);
+
+    // If there are no track URIs, return early
+    if (trackUris.length === 0) {
+      playlistsContainer.innerHTML = "<p>No tracks found in Discover Weekly playlists.</p>";
+      return;
     }
 
     // Add Tracks to the New Playlist
